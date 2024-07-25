@@ -204,6 +204,7 @@ option(MNN_CUDA "Enable CUDA" OFF)
 option(MNN_TENSORRT "Enable TensorRT" OFF)
 option(MNN_COREML "Enable CoreML" OFF)
 option(MNN_NNAPI "Enable NNAPI" OFF)
+option(MNN_HIAI_SOP "Enable HiAI SingleOp" OFF)
 
 option(MNN_CUDA_PROFILE "Enable CUDA profile" OFF)
 
@@ -255,6 +256,7 @@ message(STATUS "\tThreadPool: ${MNN_USE_THREAD_POOL}")
 message(STATUS "\tHidden: ${MNN_HIDDEN}")
 message(STATUS "\tBuild Path: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "\tCUDA PROFILE: ${MNN_CUDA_PROFILE}")
+message(STATUS "\tHiAI SingleOp: ${MNN_HIAI_SOP}")
 
 if(CMAKE_SYSTEM_NAME MATCHES "^Android" OR CMAKE_SYSTEM_NAME MATCHES "^Linux")
     add_definitions(-fPIC)

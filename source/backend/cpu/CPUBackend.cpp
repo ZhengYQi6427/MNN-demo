@@ -547,6 +547,9 @@ extern void registerBF16Backend();
 #ifdef ENABLE_ARMV82
 extern void registerArm82RuntimeCreator();
 #endif
+#ifdef ENABLE_HIAI_SOP
+extern void registerHiAISopRuntimeCreator();
+#endif
 void registerCPURuntimeCreator() {
     MNNCoreFunctionInit();
     CPUBackend::initCreatorMap();
@@ -556,6 +559,9 @@ void registerCPURuntimeCreator() {
 #endif
 #ifdef MNN_USE_ARMV82
     registerArm82RuntimeCreator();
+#endif
+#ifdef ENABLE_HIAI_SOP
+    registerHiAISopRuntimeCreator();
 #endif
     // TODO: Merge _initCoreFunction MNNFunctionInit and cpuinfo_arm_init
     MNNInsertExtraRuntimeCreator(MNN_FORWARD_CPU, new CPURuntimeCreator);
