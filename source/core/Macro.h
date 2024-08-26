@@ -48,4 +48,19 @@ typedef SSIZE_T ssize_t;
 
 #endif
 
+#if defined(ENABLE_HIAI_SOP)
+#if defined(MNN_BUILD_FOR_ANDROID) || defined(__aarch64__)
+#define MNN_USE_HIAI_SOP
+#endif
+
+#if defined(__APPLE__)
+#if TARGET_OS_SIMULATOR
+#ifdef MNN_USE_HIAI_SOP
+#undef MNN_USE_HIAI_SOP
+#endif
+#endif
+#endif
+
+#endif
+
 #endif /* macro_h */

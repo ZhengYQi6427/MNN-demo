@@ -118,7 +118,8 @@ static Backend::StorageType _getTensorStorageType(const Tensor* tensor, bool out
     if (TensorUsage::OUTPUT == usage && outputStatic) {
         return Backend::STATIC;
     }
-    if (TensorUsage::CONSTANT == usage || TensorUsage::INPUT == usage || TensorUsage::TRAINABLE == usage) {
+    if (TensorUsage::CONSTANT == usage || TensorUsage::INPUT == usage || TensorUsage::TRAINABLE == usage
+    || usage == TensorUsage::HIAI_SOP) {
         return Backend::DYNAMIC_SEPERATE;
     }
     return Backend::DYNAMIC;

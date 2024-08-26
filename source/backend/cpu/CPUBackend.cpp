@@ -24,6 +24,9 @@
 #endif // _OPENMP
 #include "backend/cpu/CPURuntime.hpp"
 #include "core/Macro.h"
+#ifdef MNN_USE_HIAI_SOP
+#include "backend/hiaisop/backend/HiAISopBackend.hpp"
+#endif
 #ifdef MNN_USE_ARMV82
 #include "backend/arm82/Arm82Backend.hpp"
 #endif
@@ -127,6 +130,10 @@ Backend* CPURuntime::onCreate(const BackendConfig* config) const {
     }
 #ifdef LOG_VERBOSE
     MNN_PRINT("cpu backend was created by runtime:%p\n", this);
+#endif
+
+#ifdef MNN_USE_HIAI_SOP
+    return new HiAISopBackend(this, memory);
 #endif
 
 #ifdef MNN_USE_ARMV82
@@ -560,7 +567,7 @@ void registerCPURuntimeCreator() {
 #ifdef MNN_USE_ARMV82
     registerArm82RuntimeCreator();
 #endif
-#ifdef ENABLE_HIAI_SOP
+#ifdef MNN_USE_HIAI_SOP
     registerHiAISopRuntimeCreator();
 #endif
     // TODO: Merge _initCoreFunction MNNFunctionInit and cpuinfo_arm_init

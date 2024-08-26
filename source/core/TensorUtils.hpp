@@ -73,6 +73,7 @@ struct Tensor::InsideDescribe {
         CONSTANT,
         /** Whether the tensor is a trainable parameter. Trainable parameter should be stored in a different area. */
         TRAINABLE,
+        HIAI_SOP,
     };
     // For Mask
     enum StageInfo {

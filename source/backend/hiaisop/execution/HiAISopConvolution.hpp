@@ -3,7 +3,7 @@
 
 #include "HiAISopSymbol.hpp"
 #include "HiAISopBackend.hpp"
-#include "core/Execution.hpp"
+#include "HiAISopExecution.hpp"
 
 namespace MNN {
 class HiAISopConvolution : public HiAISopExecution {
@@ -14,9 +14,7 @@ public:
     virtual ~HiAISopConvolution();
     virtual ErrorCode onResize(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) override;
     virtual ErrorCode onExecute(const std::vector<Tensor *> &inputs, const std::vector<Tensor *> &outputs) override;
-    HiAI_SingleOp_SupportStatus PreCheck() {
-        return HIAI_SINGLEOP_OPTIMIZED;
-    };
+    HiAI_SingleOp_SupportStatus PreCheck(const std::vector<Tensor*>& inputs, const std::vector<Tensor*>& outputs);
 
 private:
     const Convolution2DCommon* mCommon;

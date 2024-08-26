@@ -27,25 +27,29 @@ public:
     bool reallocate();
 private:
     MemChunk mPoint;
-    size_t mSize;
-    HiAI_SingleOpTensorDesc* mTensorDesc;
-    HiAI_SingleOpTensor* mTensor;
+    size_t mSize = 0;
+    HiAI_SingleOpTensorDesc* mTensorDesc = nullptr;
+    HiAI_SingleOpTensor* mTensor = nullptr;
 };
 
 class HiAISopTensorManager {
 public:
-    HiAISopTensorManager() = default;
+    HiAISopTensorManager();
     ~HiAISopTensorManager();
     Backend::MemObj* onAlloc(Tensor* t, bool isVirtual);
     void onRelease(Tensor* t);
     bool onUpdateTensorMem(Tensor* t);
+    void releaseAll();
+    void onCopy(const Tensor* srcTensor, const Tensor* dstTensor) const;
 
     HiAI_SingleOpTensorDesc* getHiAISopTensorDesc(const Tensor* t);
     HiAI_SingleOpTensor* getHiAISopTensor(const Tensor* t);
     
 private:
-    std::map<const Tensor*, Backend::MemObj*> mMemObjContainer;
+    std::map<const Tensor*, HiAISopMemObj*> mMemObjContainer;
 };
+
+HiAI_SingleOpTensorDesc* CreateSopTensorDesc(Tensor* t, bool isVirtual);
 }
 
 #endif

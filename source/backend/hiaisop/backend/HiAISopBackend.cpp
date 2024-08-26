@@ -1,5 +1,8 @@
 #include "HiAISopBackend.hpp"
 #include "core/TensorUtils.hpp"
+#include "HiAISopSymbol.hpp"
+#include "HiAISopTensorManager.hpp"
+#include "HiAISopExecution.hpp"
 
 namespace MNN {
 void registerHiAISopOps();
@@ -18,6 +21,7 @@ HiAISopBackend::~HiAISopBackend() {
 HiAISopBackend::HiAISopBackend(const CPURuntime* runtime, BackendConfig::MemoryMode memory)
      : CPUBackend(runtime, BackendConfig::Precision_Low, memory, MNN_FORWARD_CPU_EXTENSION) {
     mExecContainer.clear();
+    mTensorManager = std::make_shared<HiAISopTensorManager>();
 }
 
 Execution* HiAISopBackend::onCreate(const std::vector<Tensor*>& inputs, const std::vector<Tensor*>& outputs,
@@ -28,11 +32,11 @@ Execution* HiAISopBackend::onCreate(const std::vector<Tensor*>& inputs, const st
         auto exec = iter->second->onCreate(inputs, outputs, op, this);
         if (exec != nullptr) {
             addSopExecution(exec, inputs, outputs);
-            MNN_PRINT("HiAISop create execution for type: [%s]\n", MNN::EnumNameOpType(op->type()));
+            // MNN_PRINT("HiAISop create execution for type: [%s]\n", MNN::EnumNameOpType(op->type()));
             return exec;
         }
     }
-    MNN_PRINT("HiAISop don't support type: [%s]\n", MNN::EnumNameOpType(op->type()));
+    // MNN_PRINT("HiAISop don't support type: [%s]\n", MNN::EnumNameOpType(op->type()));
     return CPUBackend::onCreate(inputs, outputs, op);
 }
 
@@ -52,13 +56,25 @@ Backend::MemObj* HiAISopBackend::onAcquire(const Tensor* nativeTensor, StorageTy
             return originMem;
         } else {
             MNN_PRINT("HiAISop MemObj size not enough: [%zu] < [%zu]\n",
-                static_cast<HiAISopMemObj*>(originMem)->size(), ALIGNED_SIZE(size));
+                static_cast<HiAISopMemObj*>(originMem)->size(),
+                ALIGNED_SIZE(size));
             mTensorManager->onRelease(dest);
-            TensorUtils::getDescribeOrigin(nativeTensor)->mem = nullptr;
+            TensorUtils::getDescribeOrigin(dest)->mem = nullptr;
         }
     }
     MNN_ASSERT(storageType == DYNAMIC || storageType == DYNAMIC_SEPERATE);
+    TensorUtils::getDescribe(dest)->memoryType = Tensor::InsideDescribe::MEMORY_OUTSIDE;
+    TensorUtils::getDescribe(dest)->usage = TensorUsage::HIAI_SOP;
     return mTensorManager->onAlloc(dest, sopSt == HIAI_SOP_USE_ONLY);
+}
+
+bool HiAISopBackend::onClearBuffer() {
+    mTensorManager->releaseAll();
+    return CPUBackend::onClearBuffer();
+}
+
+void HiAISopBackend::onCopyBuffer(const Tensor* srcTensor, const Tensor* dstTensor) {
+    return;
 }
 
 void HiAISopBackend::onResizeBegin() {
@@ -97,10 +113,6 @@ void HiAISopBackend::updateWorkspaceSize(size_t execWorkspaceSize) {
     if (execWorkspaceSize > mWorkspaceSize) {
         mWorkspaceSize = execWorkspaceSize;
     }
-}
-
-void* HiAISopBackend::getWorkspace() {
-    return SingleOpBuffer_GetData(mWorkspaceBuffer);
 }
 
 bool HiAISopBackend::addHiAISopCreator(OpType t, HiAISopCreator* ct) {

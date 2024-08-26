@@ -6,44 +6,13 @@
 #include <map>
 #include <optional>
 #include "backend/cpu/CPUBackend.hpp"
-#include "HiAISopSymbol.hpp"
-#include "HiAISopTensorManager.hpp"
 
 namespace MNN {
-class HiAISopExecution : public Execution {
-public:
-    HiAISopExecution(Backend* backend, std::string opName) : Execution(backend) {
-        mOpName = opName;
-    }
-    virtual ~HiAISopExecution() {
-        SingleOpExecutor_Destroy(&mExec);
-    }
-    ErrorCode onInit(void* workspace) {
-        if (SingleOpExecutor_Init(mExec, workspace, workspaceSize()) != 0) {
-            return NOT_SUPPORT;
-        }
-        return NO_ERROR;
-    }
-    std::string name() const {
-        return mOpName;
-    }
-    size_t workspaceSize() const {
-        return SingleOpExecutor_GetWorkspaceSize(mExec);
-    }
-    HiAI_SingleOpExecutor* executor() const {
-        return mExec;
-    }
-protected:
-    void setExecutor(HiAI_SingleOpExecutor* executor) {
-        if (mExec != nullptr) {
-            SingleOpExecutor_Destroy(&mExec);
-        }
-        mExec = executor;
-    }
-private:
-    std::string mOpName;
-    HiAI_SingleOpExecutor* mExec {nullptr};
-};
+typedef struct HiAI_SingleOpTensorDesc HiAI_SingleOpTensorDesc;
+typedef struct HiAI_SingleOpTensor HiAI_SingleOpTensor;
+typedef struct HiAI_SingleOpBuffer HiAI_SingleOpBuffer;
+typedef struct HiAISopTensorManager HiAISopTensorManager;
+typedef struct HiAISopExecution HiAISopExecution;
 
 class HiAISopBackend : public CPUBackend {
 public:
@@ -52,7 +21,8 @@ public:
     virtual Execution* onCreate(const std::vector<Tensor*>& inputs, const std::vector<Tensor*>& outputs,
                                 const MNN::Op* op) override;
     virtual Backend::MemObj* onAcquire(const Tensor* nativeTensor, StorageType storageType) override;
-    
+    virtual bool onClearBuffer() override;
+    virtual void onCopyBuffer(const Tensor* srcTensor, const Tensor* dstTensor) override;
     virtual void onResizeBegin() override;
     virtual ErrorCode onResizeEnd() override;
 
@@ -61,7 +31,6 @@ public:
     bool onUpdateTensorMem(Tensor* t);
 
     void updateWorkspaceSize(size_t execWorkspaceSize);
-    void* getWorkspace();
 public:
     class HiAISopCreator {
     public:

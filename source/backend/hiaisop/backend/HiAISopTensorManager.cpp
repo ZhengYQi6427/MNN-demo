@@ -25,7 +25,7 @@ static HiAI_SingleOp_DataType ConvertDataType(halide_type_t type) {
     }
 }
 
-static HiAI_SingleOpTensorDesc* CreateSopTensorDesc(Tensor* t, bool isVirtual) {
+HiAI_SingleOpTensorDesc* CreateSopTensorDesc(Tensor* t, bool isVirtual) {
     size_t dimNum = t->dimensions();
     int64_t dims[dimNum];
     for (int i = 0; i < dimNum; i++) {
@@ -50,6 +50,9 @@ static HiAI_SingleOpTensorDesc* CreateSopTensorDesc(Tensor* t, bool isVirtual) {
 HiAISopMemObj::HiAISopMemObj(Tensor* nativeTensor, bool isVirtual) {
     mTensorDesc = CreateSopTensorDesc(nativeTensor, isVirtual);
     mTensor = SingleOpTensor_CreateFromTensorDesc(mTensorDesc);
+    if (mTensor == nullptr) {
+        MNN_ERROR("SingleOpTensor_CreateFromTensorDesc failed: %p\n", nativeTensor);
+    }
     auto buf = SingleOpTensor_GetBuffer(mTensor);
     auto desc = SingleOpTensor_GetTensorDesc(mTensor);
     mPoint = MemChunk(SingleOpBuffer_GetData(buf), 0);
@@ -63,6 +66,7 @@ HiAISopMemObj::~HiAISopMemObj() {
 
 bool HiAISopMemObj::reallocate() {
     if (mTensor != nullptr) {
+        MNN_ERROR("release old sop tensor %p\n", mTensor);
         SingleOpTensor_Destroy(&mTensor);
     }
     mTensor = SingleOpTensor_CreateFromTensorDesc(mTensorDesc);
@@ -77,15 +81,21 @@ bool HiAISopMemObj::reallocate() {
     return true;
 }
 
+HiAISopTensorManager::HiAISopTensorManager() {
+    mMemObjContainer.clear();
+}
+
+HiAISopTensorManager::~HiAISopTensorManager() {
+    releaseAll();
+}
+
 Backend::MemObj* HiAISopTensorManager::onAlloc(Tensor* t, bool isVirtual) {
-    Backend::MemObj* memObj = nullptr;
-    if (mMemObjContainer.find(t) != mMemObjContainer.end()) {
-        memObj = mMemObjContainer[t];
+    if (mMemObjContainer.find(t) == mMemObjContainer.end()) {
+        mMemObjContainer[t] = new HiAISopMemObj(t, isVirtual);
     } else {
-        memObj = new HiAISopMemObj(t, isVirtual);
-        mMemObjContainer[t] = memObj;
+        return mMemObjContainer[t];
     }
-    MemChunk chunk = memObj->chunk();
+    auto chunk = mMemObjContainer[t];
     if (chunk.ptr()) {
         auto& buffer = t->buffer();
         buffer.host = chunk.ptr();
@@ -98,12 +108,62 @@ void HiAISopTensorManager::onRelease(Tensor* t) {
         MNN_ERROR("MNN tensor has no hiai sop tensor obj\n");
         return;
     }
-    auto memObj = mMemObjContainer[t];
-    delete memObj;
     auto& buffer = t->buffer();
     buffer.host = nullptr;
     mMemObjContainer.erase(t);
     return;
+}
+
+bool HiAISopTensorManager::onUpdateTensorMem(Tensor* t) {
+    if (mMemObjContainer.find(t) == mMemObjContainer.end()) {
+        MNN_ERROR("MNN tensor has no hiai sop tensor obj\n");
+        return false;
+    }
+    if (!mMemObjContainer[t]->reallocate()) {
+        return false;
+    }
+    MemChunk chunk = mMemObjContainer[t]->chunk();
+    if (chunk.ptr()) {
+        auto& buffer = t->buffer();
+        buffer.host = chunk.ptr();
+    }
+    return true;
+}
+
+void HiAISopTensorManager::releaseAll() {
+    for (auto iter = mMemObjContainer.begin(); iter != mMemObjContainer.end(); iter++) {
+        auto t = const_cast<Tensor*>(iter->first);
+        auto& buffer = t->buffer();
+        buffer.host = nullptr;
+    }
+    mMemObjContainer.clear();
+}
+
+void HiAISopTensorManager::onCopy(const Tensor* srcTensor, const Tensor* dstTensor) const {
+    auto srcIter = mMemObjContainer.find(srcTensor);
+    auto dstIter = mMemObjContainer.find(dstTensor);
+    if (srcIter == mMemObjContainer.end() || dstIter == mMemObjContainer.end()) {
+        MNN_ERROR("src or dst tensor has no hiai sop tensor");
+        return;
+    }
+    auto srcMemObj = srcIter->second;
+    auto dstMemObj = dstIter->second;
+    auto srcSize = srcMemObj->size();
+    auto dstSize = dstMemObj->size();
+    if (srcSize > dstSize) {
+        MNN_ERROR("src size > dst size, copy failed\n");
+        return;
+    }
+    auto srcDesc = srcMemObj->sopTensorDesc();
+    auto dstDesc = dstMemObj->sopTensorDesc();
+    if (SingleOpTensorDesc_GetDataType(srcDesc) != SingleOpTensorDesc_GetDataType(dstDesc) ||
+        SingleOpTensorDesc_GetFormat(srcDesc) != SingleOpTensorDesc_GetFormat(dstDesc)) {
+        MNN_ERROR("src tensor and dst tensor are not the same datatype or format\n");
+        return;
+    }
+    auto srcChunk = srcMemObj->chunk();
+    auto dstChunk = dstMemObj->chunk();
+    memcpy(srcChunk.ptr(), dstChunk.ptr(), srcSize);
 }
 
 HiAI_SingleOpTensorDesc* HiAISopTensorManager::getHiAISopTensorDesc(const Tensor* t) {
@@ -111,7 +171,7 @@ HiAI_SingleOpTensorDesc* HiAISopTensorManager::getHiAISopTensorDesc(const Tensor
         MNN_ERROR("MNN tensor has no hiai sop tensor obj\n");
         return nullptr;
     }
-    auto memObj = static_cast<HiAISopMemObj*>(mMemObjContainer[t]);
+    auto memObj = mMemObjContainer[t];
     return memObj->sopTensorDesc();
 }
 
@@ -120,24 +180,7 @@ HiAI_SingleOpTensor* HiAISopTensorManager::getHiAISopTensor(const Tensor* t) {
         MNN_ERROR("MNN tensor has no hiai sop tensor obj\n");
         return nullptr;
     }
-    auto memObj = static_cast<HiAISopMemObj*>(mMemObjContainer[t]);
+    auto memObj = mMemObjContainer[t];
     return memObj->sopTensor();
-}
-
-bool HiAISopTensorManager::onUpdateTensorMem(Tensor* t) {
-    if (mMemObjContainer.find(t) == mMemObjContainer.end()) {
-        MNN_ERROR("MNN tensor has no hiai sop tensor obj\n");
-        return false;
-    }
-    auto memObj = static_cast<HiAISopMemObj*>(mMemObjContainer[t]);
-    if (!memObj->reallocate()) {
-        return false;
-    }
-    MemChunk chunk = memObj->chunk();
-    if (chunk.ptr()) {
-        auto& buffer = t->buffer();
-        buffer.host = chunk.ptr();
-    }
-    return true;
 }
 }
